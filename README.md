@@ -1,8 +1,19 @@
-# Creative Sound Labs: Sound BlasterX G6 Studio Console
+# Sound BlasterX G6 Studio Console
+### Open Hardware Controller & Safety Mixer for Creative Labs SB1770
 
-> **"Built by an anonymous audio engineer who loves Creative's hardware, but hates their bloated software."**
+> **Dedicated to Creative Labs hardware. Uncredited. 100% Free for everyone.**
 
-An ultra-lightweight, zero-bloat, open-source live mixer, safety limiter, and hardware controller for the **Creative Sound BlasterX G6 (SB1770)**.
+An ultra-lightweight, zero-bloat, open-source live mixer, safety limiter, and direct hardware controller engineered specifically for the **Creative Sound BlasterX G6 (SB1770)**.
+
+---
+
+## Legal Notice & Trademark Disclaimer
+
+* This is an independent, uncredited open-source community tool developed exclusively for use with Creative Labs Sound BlasterX G6 hardware.
+* This project is **not** affiliated with, endorsed by, or sponsored by Creative Technology Ltd.
+* "Sound Blaster", "Sound BlasterX", and "Creative" are registered trademarks of Creative Technology Ltd.
+* All trademarks, product names, and company names referenced herein are used solely for identification, compatibility, and nominative fair use purposes.
+* No individual or third-party entity claims credit or ownership over this software. It is released under the **MIT-0 (No Attribution Required)** license.
 
 ---
 
@@ -16,10 +27,10 @@ Underneath Creative's 600MB consumer gaming software suite, the Sound BlasterX G
 * **Routing:** Real mechanical **Takamisawa telecom-grade relay** physically switching line and headphone paths.
 
 **The Problem:**
-Creative is a hardware company, not a software company. Their official software (*Sound Blaster Command*) installs background telemetry (`Creative.Platform.Analytics.dll`), auto-updaters, and broken Audio Processing Objects (`cfSB1770.ini`) that memory-leak into the Windows kernel audio engine (`audiodg.exe`), causing the infamous **crunchy, robotic bit-crusher distortion bug**.
+Creative's official software (*Sound Blaster Command*) installs background telemetry (`Creative.Platform.Analytics.dll`), auto-updaters, and broken Audio Processing Objects (`cfSB1770.ini`) that memory-leak into the Windows kernel audio engine (`audiodg.exe`), causing the infamous **crunchy, robotic bit-crusher distortion bug**.
 
 **The Solution:**
-**Creative Sound Labs Studio Console.** 
+**G6 Studio Console.** 
 Zero background services. Zero telemetry. Zero bloat. Just a clean, responsive studio mixer communicating directly with the G6's hardware.
 
 ---
@@ -69,5 +80,5 @@ python creative_sound_labs_g6.py
 ---
 
 ## License
-MIT License — 100% Free, Open Source, and Public Domain friendly. 
-Do whatever you want with it. Spread it to anyone suffering from Creative's default software.
+Released under the **MIT-0 (MIT No Attribution)** License. 
+Free for all users and developers. No credit, attribution, or fees required.

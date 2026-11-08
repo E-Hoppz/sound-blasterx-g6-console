@@ -1,8 +1,12 @@
 """
 ================================================================================
-   CREATIVE SOUND LABS: SOUND BLASTERX G6 STUDIO DIRECT CONSOLE
-   Open-Source Community Edition - Free & Autonomous Pro Audio Tool
+   SOUND BLASTERX G6 STUDIO CONSOLE (SB1770)
+   Uncredited Community Edition - 100% Free Open Hardware Controller
 ================================================================================
+Notice: Built specifically for Creative Labs Sound BlasterX G6 (SB1770) hardware.
+Uncredited release under MIT-0. Not affiliated with or endorsed by Creative Technology Ltd.
+================================================================================
+
 Engineered for the physical hardware topology of the Sound BlasterX G6 (SB1770):
 - DAC: Cirrus Logic CS43131 MasterHIFI (32-bit / 384kHz, 130dB DNR, -115dB THD+N)
 - Analog Reconstruction Filter: German WIMA film/foil capacitors
@@ -308,7 +312,7 @@ class LiveChannelStrip:
 class CreativeSoundLabsApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Creative Sound Labs - Sound BlasterX G6 Studio Console")
+        self.root.title("Sound BlasterX G6 Studio Console (For Creative Labs SB1770)")
         self.root.geometry("1120x760")
         self.root.configure(bg=BG_DARK)
         self.root.minsize(1020, 690)
@@ -505,7 +509,7 @@ class CreativeSoundLabsApp:
     def sync_system_apo(self):
         lines = [
             "# ========================================================",
-            "# CREATIVE SOUND LABS - G6 DIRECT CONSOLE CONFIG",
+            "# G6 DIRECT CONSOLE - HARDWARE SYNC FOR CREATIVE SB1770",
             f"# Active Card Model: {self.active_preset_name}",
             "# ========================================================\n"
         ]
@@ -546,7 +550,7 @@ class CreativeSoundLabsApp:
         with open(out_path, "w", encoding="utf-8") as f:
             f.write("\n".join(lines))
             
-        messagebox.showinfo("Mixer Synced", f"Creative Sound Labs G6 Synced!\nActive Card: {self.active_preset_name}\n\nExported to:\n{out_path}")
+        messagebox.showinfo("Mixer Synced", f"Sound BlasterX G6 Synced!\nActive Card: {self.active_preset_name}\n\nExported to:\n{out_path}")
 
 if __name__ == "__main__":
     root = tk.Tk()

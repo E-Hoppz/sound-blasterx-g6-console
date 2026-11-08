@@ -1,5 +1,5 @@
 @echo off
-title Creative Sound Labs - G6 Studio Console
+title Sound BlasterX G6 Studio Console
 cd /d "%~dp0"
 
 where py >nul 2>nul

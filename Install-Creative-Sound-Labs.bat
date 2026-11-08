@@ -1,11 +1,11 @@
 @echo off
 setlocal enabledelayedexpansion
-title Creative Sound Labs - G6 Studio Console Setup
+title Sound BlasterX G6 Studio Console Setup
 cd /d "%~dp0"
 
 echo =====================================================================
-echo       CREATIVE SOUND LABS: SOUND BLASTERX G6 STUDIO CONSOLE
-echo                1-Click Setup ^& Deployment Tool
+echo       SOUND BLASTERX G6 STUDIO CONSOLE (FOR CREATIVE SB1770)
+echo            1-Click Setup ^& Hardware Controller Deployment
 echo =====================================================================
 echo.
 
@@ -54,16 +54,16 @@ set "TARGET_BAT=%~dp0Launch-Creative-Sound-Labs.bat"
 set "WORK_DIR=%~dp0"
 set "ICON_SRC=shell32.dll,138"
 
-powershell -NoProfile -Command "$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut([System.IO.Path]::Combine([Environment]::GetFolderPath('Desktop'), 'Creative Sound Labs G6.lnk')); $s.TargetPath = '%TARGET_BAT%'; $s.WorkingDirectory = '%WORK_DIR%'; $s.IconLocation = '%ICON_SRC%'; $s.Description = 'Creative Sound Labs - Sound BlasterX G6 Studio Console'; $s.Save()"
+powershell -NoProfile -Command "$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut([System.IO.Path]::Combine([Environment]::GetFolderPath('Desktop'), 'Sound BlasterX G6 Console.lnk')); $s.TargetPath = '%TARGET_BAT%'; $s.WorkingDirectory = '%WORK_DIR%'; $s.IconLocation = '%ICON_SRC%'; $s.Description = 'Sound BlasterX G6 Studio Console (For Creative Labs SB1770)'; $s.Save()"
 
-set "START_MENU=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Creative Sound Labs"
+set "START_MENU=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Sound BlasterX G6"
 if not exist "%START_MENU%" mkdir "%START_MENU%"
 
-powershell -NoProfile -Command "$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut('%START_MENU%\Creative Sound Labs G6.lnk'); $s.TargetPath = '%TARGET_BAT%'; $s.WorkingDirectory = '%WORK_DIR%'; $s.IconLocation = '%ICON_SRC%'; $s.Description = 'Creative Sound Labs - Sound BlasterX G6 Studio Console'; $s.Save()"
+powershell -NoProfile -Command "$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut('%START_MENU%\Sound BlasterX G6 Console.lnk'); $s.TargetPath = '%TARGET_BAT%'; $s.WorkingDirectory = '%WORK_DIR%'; $s.IconLocation = '%ICON_SRC%'; $s.Description = 'Sound BlasterX G6 Studio Console (For Creative Labs SB1770)'; $s.Save()"
 
 echo [+] Shortcuts created:
-echo     - Desktop: "Creative Sound Labs G6.lnk"
-echo     - Start Menu: "%START_MENU%\Creative Sound Labs G6.lnk"
+echo     - Desktop: "Sound BlasterX G6 Console.lnk"
+echo     - Start Menu: "%START_MENU%\Sound BlasterX G6 Console.lnk"
 echo.
 echo =====================================================================
 echo                INSTALLATION COMPLETE!
