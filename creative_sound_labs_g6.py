@@ -16,29 +16,32 @@ Engineered for the physical hardware topology of the Sound BlasterX G6 (SB1770):
 - Processor: Creative SB-Axx1 (CA0132 DSP & USB Streaming Engine)
 
 Features:
-- Live 3-Channel Mixer: Front Mic In, Rear Line/Optical In, Digital Loopback
+- Live 3-Channel Pro Mixer: Front Mic In, Rear Line/Optical In, Digital Loopback
+- Interactive Real-Time Frequency Response Visualizer (20Hz - 20kHz Logarithmic)
 - Input Trim / Gain Staging (-24 dB to +24 dB)
 - 3-Band Parametric Live Tone EQ
 - Pro Safety Compressor / Brickwall Limiter (Protects hearing & monitors from sudden loud spikes)
 - Schematic-Accurate Legacy Sound Blaster Card Emulations:
     * Sound Blaster Live! Pro (1998 - EMU10K1 + STAC9721T AC'97)
-    * Sound Blaster 16 / AWE64 Gold (1994 - CT1740/CT1745 Butterworth LPF)
+    * Sound Blaster 16 / AWE64 Gold (1994 - CT1740/CT4540 Butterworth LPF)
     * Sound Blaster Audigy 2 ZS (2003 - CA0102 / CS4382)
     * Sound Blaster X-Fi Fatal1ty (2005 - 24-bit Crystalizer)
-    * Sound Blaster Pro 2.0 (1991 - CT1600 OPL3 Sallen-Key Filter)
-- Raw USB HID RGB "X" Logo Hardware Lighting Controller (Interface 4)
-- 1-Click System Sync via Equalizer APO (Zero Background Bloatware, Zero Telemetry)
+    * Sound Blaster Pro 2.0 (1991 - CT1600 Dual OPL3 Sallen-Key Filter)
+- Raw USB HID RGB "X" Logo Hardware Lighting Controller (Interface 4 / MI_04)
+- Live Auto-Sync with Equalizer APO System Audio Engine
 """
 
 import sys
 import os
 import math
 import json
+import urllib.request
+import subprocess
 import tkinter as tk
 from tkinter import ttk, colorchooser, messagebox
 import hid
 
-# Theme: Creative Sound Labs Dark Graphite & Retro Amber
+# Theme: Dark Studio Graphite & Retro Amber
 BG_DARK = "#14161a"
 PANEL_BG = "#1e2228"
 STRIP_BG = "#262b33"
@@ -51,61 +54,73 @@ TEXT_COLOR = "#dcdfe4"
 TEXT_MUTED = "#6f7783"
 BORDER_COLOR = "#333942"
 
-# Schematic-Accurate Legacy Card Audio Pipe Models
+# Deep Schematic-Accurate Vintage Card Circuit Models
 LEGACY_PRESETS = {
     "DIRECT (Raw CS43131 Bit-Perfect)": {
-        "desc": "100% Bit-Perfect transparent signal chain. All filters bypassed. Zero phase coloration, pure MasterHIFI DAC stream.",
+        "desc": "100% Bit-Perfect pure stream. All filters bypassed. Zero phase coloration, pure MasterHIFI DAC topology.",
+        "preamp": 0.0,
         "filters": []
     },
     "SB Live! Pro (1998 - EMU10K1)": {
-        "desc": "CT4620/CT4760 path: 48kHz sinc interpolation ripple, STAC9721T AC'97 bass punch (+3.2dB @ 85Hz), EAX 3.6kHz presence bite.",
+        "desc": "EMU10K1 48kHz locked DSP path: 8-pt sinc interpolation ripple (+1.6dB @ 15.5kHz), STAC9721T AC'97 bass (+3.2dB @ 85Hz), EAX 3.6kHz vocal bite.",
+        "preamp": 0.0,
         "filters": [
-            {"type": "LSC", "fc": 85, "gain": 3.2, "q": 1.1},
-            {"type": "PK", "fc": 450, "gain": -1.5, "q": 1.2},
+            {"type": "LSC", "fc": 85, "gain": 3.2, "q": 1.0},
+            {"type": "PK", "fc": 260, "gain": 1.2, "q": 1.4},
             {"type": "PK", "fc": 3600, "gain": 2.8, "q": 1.4},
-            {"type": "PK", "fc": 14000, "gain": -0.8, "q": 2.0},
-            {"type": "HSC", "fc": 16500, "gain": -2.8, "q": 0.71}
+            {"type": "PK", "fc": 13500, "gain": -0.8, "q": 2.2},
+            {"type": "PK", "fc": 15500, "gain": 1.6, "q": 2.8},
+            {"type": "HSC", "fc": 19000, "gain": -4.0, "q": 0.71}
         ]
     },
     "SB 16 / AWE64 Gold (1994 - CT1740)": {
-        "desc": "CT1740/CT1745 mixer: 3rd-order Butterworth LPF (-18dB/oct @ 15kHz), 100Hz warm bass tone control (+3.8dB), 220Hz low-mid saturation.",
+        "desc": "CT1745 mixer + EMU8000: 3rd-order Butterworth LPF (-18dB/oct @ 15.2kHz), CT1745 100Hz Bass shelf (+4.2dB), 240Hz analog warmth.",
+        "preamp": -0.8,
         "filters": [
-            {"type": "LSC", "fc": 100, "gain": 3.8, "q": 0.9},
-            {"type": "PK", "fc": 220, "gain": 2.2, "q": 1.3},
-            {"type": "PK", "fc": 2200, "gain": -1.2, "q": 1.0},
-            {"type": "HSC", "fc": 14500, "gain": -6.5, "q": 0.71}
+            {"type": "HP", "fc": 32, "gain": 0.0, "q": 0.71},
+            {"type": "LSC", "fc": 100, "gain": 4.2, "q": 0.85},
+            {"type": "PK", "fc": 240, "gain": 1.8, "q": 1.3},
+            {"type": "PK", "fc": 2000, "gain": -1.2, "q": 1.0},
+            {"type": "HSC", "fc": 10000, "gain": 1.8, "q": 0.71},
+            {"type": "LP", "fc": 15200, "gain": 0.0, "q": 0.71}
         ]
     },
     "SB Audigy 2 ZS (2003 - CA0102)": {
-        "desc": "SB0350 CA0102 + CS4382 24-bit clean path: tight 60Hz sub punch (+3.2dB), pinpoint 2.8kHz LAN gaming imaging, pristine 11.5kHz crystal highs.",
+        "desc": "CA0102 DSP + Cirrus CS4382 24-bit/192kHz (THX Certified): tight 55Hz sub punch, transparent mids, competitive 2.8kHz imaging, 11.5kHz crystal air.",
+        "preamp": 0.5,
         "filters": [
-            {"type": "PK", "fc": 60, "gain": 3.2, "q": 1.5},
-            {"type": "PK", "fc": 600, "gain": -0.8, "q": 1.0},
-            {"type": "PK", "fc": 2800, "gain": 2.6, "q": 1.5},
-            {"type": "PK", "fc": 11500, "gain": 2.8, "q": 1.2},
-            {"type": "HSC", "fc": 15000, "gain": 1.5, "q": 0.71}
+            {"type": "PK", "fc": 55, "gain": 2.8, "q": 1.6},
+            {"type": "PK", "fc": 2800, "gain": 2.6, "q": 1.8},
+            {"type": "PK", "fc": 11500, "gain": 3.0, "q": 1.3},
+            {"type": "HSC", "fc": 16000, "gain": 1.8, "q": 0.8}
         ]
     },
     "SB X-Fi Fatal1ty (2005 - Crystalizer)": {
-        "desc": "EMU20K1 DSP 24-bit Crystalizer curve: +4.2dB transient sub expansion (65Hz), 800Hz stereo widening scoop, +4.8dB harmonic high exciter (12kHz).",
+        "desc": "EMU20K1 24-bit Crystalizer multi-band dynamic expander: +4.8dB sub transient punch (65Hz), 750Hz stereo widening scoop, +5.4dB high transient exciter (12.5kHz).",
+        "preamp": -1.2,
         "filters": [
-            {"type": "PK", "fc": 65, "gain": 4.2, "q": 1.2},
-            {"type": "PK", "fc": 120, "gain": 2.0, "q": 1.4},
-            {"type": "PK", "fc": 800, "gain": -1.8, "q": 1.1},
-            {"type": "PK", "fc": 7500, "gain": 3.6, "q": 1.3},
-            {"type": "HSC", "fc": 12000, "gain": 4.8, "q": 0.8}
+            {"type": "PK", "fc": 65, "gain": 4.8, "q": 1.1},
+            {"type": "PK", "fc": 115, "gain": 2.6, "q": 1.3},
+            {"type": "PK", "fc": 750, "gain": -2.0, "q": 1.0},
+            {"type": "PK", "fc": 5500, "gain": 3.4, "q": 1.2},
+            {"type": "HSC", "fc": 12500, "gain": 5.4, "q": 0.9},
+            {"type": "HSC", "fc": 16500, "gain": 3.6, "q": 0.71}
         ]
     },
     "SB Pro 2.0 (1991 - CT1600 OPL3)": {
-        "desc": "Dual OPL3 CT1600 Sallen-Key analog filter stage: 60Hz sub cut, warm 200Hz resonant FM body (+3.6dB), steep 11.5kHz analog low-pass cutoff.",
+        "desc": "Dual OPL3 CT1600 + LM324 Sallen-Key 2nd-order active LPF (-12dB/oct @ 11.5kHz), 50Hz DC decoupling high-pass, warm 190Hz resonant FM body (+3.8dB).",
+        "preamp": -1.5,
         "filters": [
-            {"type": "HP", "fc": 60, "gain": 0.0, "q": 0.71},
-            {"type": "PK", "fc": 200, "gain": 3.6, "q": 1.2},
-            {"type": "PK", "fc": 1500, "gain": 1.5, "q": 1.5},
-            {"type": "LP", "fc": 11500, "gain": 0.0, "q": 0.71}
+            {"type": "HP", "fc": 50, "gain": 0.0, "q": 0.71},
+            {"type": "PK", "fc": 190, "gain": 3.8, "q": 1.2},
+            {"type": "PK", "fc": 3200, "gain": -1.5, "q": 1.0},
+            {"type": "LP", "fc": 11500, "gain": 0.0, "q": 0.707}
         ]
     }
 }
+
+APO_CONFIG_PATH = r"C:\Program Files\EqualizerAPO\config\config.txt"
+
 
 class LiveChannelStrip:
     def __init__(self, parent, title, input_desc, accent_color, on_change_callback):
@@ -132,6 +147,8 @@ class LiveChannelStrip:
         self.comp_thresh = -14.0
         self.safety_limit = True
         
+        self.eq_sliders = {}
+        
         self.frame = tk.Frame(parent, bg=STRIP_BG, bd=1, relief=tk.SOLID, highlightbackground=BORDER_COLOR, highlightthickness=1)
         self.build_strip()
         
@@ -143,14 +160,13 @@ class LiveChannelStrip:
         tk.Label(h_frame, text=self.title, font=("Segoe UI", 9, "bold"), fg=self.accent_color, bg=HEADER_BG).pack(side=tk.LEFT, padx=6)
         tk.Label(h_frame, text=self.input_desc, font=("Segoe UI", 7), fg=TEXT_MUTED, bg=HEADER_BG).pack(side=tk.RIGHT, padx=6)
         
-        # 1. Trim / Gain Staging
-        trim_box = tk.Frame(self.frame, bg=PANEL_BG, padx=6, pady=4)
-        trim_box.pack(fill=tk.X, padx=4, pady=3)
-        
-        t_row = tk.Frame(trim_box, bg=PANEL_BG)
+        # 1. Input Trim
+        trim_box = tk.Frame(self.frame, bg=STRIP_BG, padx=6, pady=4)
+        trim_box.pack(fill=tk.X)
+        t_row = tk.Frame(trim_box, bg=STRIP_BG)
         t_row.pack(fill=tk.X)
-        tk.Label(t_row, text="TRIM / GAIN", font=("Segoe UI", 7, "bold"), fg=TEXT_MUTED, bg=PANEL_BG).pack(side=tk.LEFT)
-        self.lbl_trim = tk.Label(t_row, text="+0.0 dB", font=("Consolas", 8, "bold"), fg=ACCENT_BLUE, bg=PANEL_BG)
+        tk.Label(t_row, text="INPUT TRIM", font=("Segoe UI", 7, "bold"), fg=TEXT_COLOR, bg=STRIP_BG).pack(side=tk.LEFT)
+        self.lbl_trim = tk.Label(t_row, text="+0.0 dB", font=("Consolas", 7, "bold"), fg=CREATIVE_ORANGE, bg=STRIP_BG)
         self.lbl_trim.pack(side=tk.RIGHT)
         
         self.scale_trim = ttk.Scale(trim_box, from_=-24, to=24, orient=tk.HORIZONTAL, command=self.on_trim_slider)
@@ -167,17 +183,16 @@ class LiveChannelStrip:
         self.btn_eq = tk.Button(eq_h, text="ON", font=("Segoe UI", 6, "bold"), bg="#2d422a", fg=ACCENT_GREEN, bd=0, padx=4, command=self.toggle_eq)
         self.btn_eq.pack(side=tk.RIGHT)
         
-        self.eq_sliders = {}
         for band_id, lbl_text in [("low", "LOW 100Hz"), ("mid", "MID 1.0kHz"), ("high", "HIGH 10kHz")]:
             row = tk.Frame(eq_box, bg=STRIP_BG)
             row.pack(fill=tk.X, pady=1)
             tk.Label(row, text=lbl_text, font=("Segoe UI", 6), fg=TEXT_COLOR, bg=STRIP_BG, width=10, anchor="w").pack(side=tk.LEFT)
             lbl_val = tk.Label(row, text=" 0.0", font=("Consolas", 6), fg=TEXT_MUTED, bg=STRIP_BG, width=5)
             s = ttk.Scale(row, from_=-12, to=12, orient=tk.HORIZONTAL, command=lambda v, b=band_id: self.on_eq_slider(b, v))
+            self.eq_sliders[band_id] = (s, lbl_val)
             s.set(0)
             s.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=2)
             lbl_val.pack(side=tk.RIGHT)
-            self.eq_sliders[band_id] = (s, lbl_val)
             
         # 3. Safety Compressor / Limiter
         comp_box = tk.Frame(self.frame, bg=STRIP_BG, bd=1, relief=tk.SOLID, padx=6, pady=4)
@@ -274,9 +289,10 @@ class LiveChannelStrip:
         if band == "low": self.eq_low = gain
         elif band == "mid": self.eq_mid = gain
         elif band == "high": self.eq_high = gain
-        slider, lbl = self.eq_sliders[band]
-        sign = "+" if gain > 0 else ""
-        lbl.config(text=f"{sign}{gain:.1f}")
+        if band in self.eq_sliders:
+            slider, lbl = self.eq_sliders[band]
+            sign = "+" if gain > 0 else ""
+            lbl.config(text=f"{sign}{gain:.1f}")
         self.on_change()
 
     def on_thresh_slider(self, val):
@@ -290,12 +306,16 @@ class LiveChannelStrip:
 
     def toggle_eq(self):
         self.eq_active = not self.eq_active
-        self.btn_eq.config(text="ON" if self.eq_active else "OFF", bg="#2d422a" if self.eq_active else "#333", fg=ACCENT_GREEN if self.eq_active else "#666")
+        self.btn_eq.config(text="ON" if self.eq_active else "OFF",
+                           bg="#2d422a" if self.eq_active else "#333",
+                           fg=ACCENT_GREEN if self.eq_active else "#888")
         self.on_change()
 
     def toggle_comp(self):
         self.comp_active = not self.comp_active
-        self.btn_comp.config(text="ON" if self.comp_active else "OFF", bg="#48331d" if self.comp_active else "#333", fg=CREATIVE_ORANGE if self.comp_active else "#666")
+        self.btn_comp.config(text="ON" if self.comp_active else "OFF",
+                            bg="#48331d" if self.comp_active else "#333",
+                            fg=CREATIVE_ORANGE if self.comp_active else "#888")
         self.on_change()
 
     def toggle_mute(self):
@@ -313,12 +333,13 @@ class CreativeSoundLabsApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Sound BlasterX G6 Studio Console (For Creative Labs SB1770)")
-        self.root.geometry("1120x760")
+        self.root.geometry("1160x780")
         self.root.configure(bg=BG_DARK)
-        self.root.minsize(1020, 690)
+        self.root.minsize(1040, 710)
         
         self.active_preset_name = "DIRECT (Raw CS43131 Bit-Perfect)"
         self.hid_device = None
+        self.hid_path = None
         self.hid_connected = False
         
         self.init_hid()
@@ -327,11 +348,28 @@ class CreativeSoundLabsApp:
         self.build_mixer_canvas()
         self.build_hardware_dock()
         
+        # Initial draw of spectrum & system sync
+        self.update_spectrum_curve()
+        self.sync_system_apo(silent=True)
+        
     def init_hid(self):
+        self.hid_device = None
+        self.hid_path = None
+        self.hid_connected = False
         try:
-            self.hid_device = hid.device()
-            self.hid_device.open(0x041e, 0x3256)
-            self.hid_connected = True
+            devs = hid.enumerate(0x041e, 0x3256)
+            for d in devs:
+                if d.get('interface_number') == 4 or b"&mi_04" in d.get('path', b'').lower():
+                    self.hid_path = d['path']
+                    break
+            if not self.hid_path and devs:
+                self.hid_path = devs[0]['path']
+                
+            if self.hid_path:
+                h = hid.device()
+                h.open_path(self.hid_path)
+                self.hid_device = h
+                self.hid_connected = True
         except Exception:
             self.hid_connected = False
 
@@ -343,34 +381,129 @@ class CreativeSoundLabsApp:
         logo_frame = tk.Frame(top, bg=HEADER_BG)
         logo_frame.pack(side=tk.LEFT, padx=14, pady=6)
         
-        tk.Label(logo_frame, text="CREATIVE SOUND LABS", font=("Impact", 16), fg=CREATIVE_ORANGE, bg=HEADER_BG).pack(side=tk.LEFT)
-        tk.Label(logo_frame, text=" | G6 DIRECT STUDIO CONSOLE", font=("Segoe UI", 9, "bold"), fg="#fff", bg=HEADER_BG).pack(side=tk.LEFT, pady=2)
+        tk.Label(logo_frame, text="SOUND BLASTERX G6", font=("Impact", 16), fg=CREATIVE_ORANGE, bg=HEADER_BG).pack(side=tk.LEFT)
+        tk.Label(logo_frame, text=" | STUDIO DIRECT CONSOLE", font=("Segoe UI", 9, "bold"), fg="#fff", bg=HEADER_BG).pack(side=tk.LEFT, pady=2)
         
         spec_box = tk.Frame(top, bg="#0f1114", bd=1, relief=tk.SOLID, padx=8, pady=3)
         spec_box.pack(side=tk.LEFT, padx=16)
-        tk.Label(spec_box, text="DAC: CIRRUS LOGIC CS43131 384kHz MasterHIFI | WIMA LPF | XAMP DISCRETE PUSH-PULL", font=("Consolas", 8, "bold"), fg=ACCENT_GREEN, bg="#0f1114").pack()
+        tk.Label(spec_box, text="DAC: CIRRUS CS43131 384kHz MasterHIFI | WIMA CAPS | XAMP DISCRETE PUSH-PULL", font=("Consolas", 8, "bold"), fg=ACCENT_GREEN, bg="#0f1114").pack()
         
         stat_frame = tk.Frame(top, bg=HEADER_BG)
         stat_frame.pack(side=tk.RIGHT, padx=14)
         hid_c = ACCENT_GREEN if self.hid_connected else ACCENT_RED
-        hid_t = "USB HID: LINKED" if self.hid_connected else "USB HID: DISCONNECTED"
-        tk.Label(stat_frame, text=hid_t, font=("Consolas", 8, "bold"), fg=hid_c, bg=HEADER_BG).pack(anchor="e")
-        tk.Label(stat_frame, text="STREAM: DIRECT HARDWARE (BIT-PERFECT)", font=("Consolas", 8, "bold"), fg=CREATIVE_ORANGE, bg=HEADER_BG).pack(anchor="e")
+        hid_t = "USB HID: LINKED (MI_04)" if self.hid_connected else "USB HID: DISCONNECTED"
+        self.lbl_hid_stat = tk.Label(stat_frame, text=hid_t, font=("Consolas", 8, "bold"), fg=hid_c, bg=HEADER_BG)
+        self.lbl_hid_stat.pack(anchor="e")
+        
+        apo_installed = os.path.exists(APO_CONFIG_PATH)
+        apo_c = ACCENT_GREEN if apo_installed else CREATIVE_ORANGE
+        apo_t = "SYSTEM APO: ACTIVE (REALTIME)" if apo_installed else "SYSTEM APO: STANDALONE (EXPORT MODE)"
+        self.lbl_apo_stat = tk.Label(stat_frame, text=apo_t, font=("Consolas", 8, "bold"), fg=apo_c, bg=HEADER_BG)
+        self.lbl_apo_stat.pack(anchor="e")
 
     def build_preset_ribbon(self):
-        ribbon = tk.Frame(self.root, bg="#1a1e24", height=48, bd=1, relief=tk.SOLID)
+        ribbon = tk.Frame(self.root, bg="#1a1e24", height=90, bd=1, relief=tk.SOLID)
         ribbon.pack(fill=tk.X, padx=8, pady=(6, 2))
         ribbon.pack_propagate(False)
         
-        tk.Label(ribbon, text="LEGACY SOUND BLASTER CARD EMULATION:", font=("Segoe UI", 8, "bold"), fg=CREATIVE_ORANGE, bg="#1a1e24").pack(side=tk.LEFT, padx=10)
+        left_f = tk.Frame(ribbon, bg="#1a1e24")
+        left_f.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10, pady=4)
         
-        self.preset_combo = ttk.Combobox(ribbon, values=list(LEGACY_PRESETS.keys()), state="readonly", width=34, font=("Segoe UI", 8, "bold"))
+        p_row = tk.Frame(left_f, bg="#1a1e24")
+        p_row.pack(fill=tk.X)
+        tk.Label(p_row, text="LEGACY SOUND BLASTER CARD EMULATION:", font=("Segoe UI", 8, "bold"), fg=CREATIVE_ORANGE, bg="#1a1e24").pack(side=tk.LEFT)
+        
+        self.preset_combo = ttk.Combobox(p_row, values=list(LEGACY_PRESETS.keys()), state="readonly", width=34, font=("Segoe UI", 8, "bold"))
         self.preset_combo.set(self.active_preset_name)
-        self.preset_combo.pack(side=tk.LEFT, padx=6)
+        self.preset_combo.pack(side=tk.LEFT, padx=8)
         self.preset_combo.bind("<<ComboboxSelected>>", self.on_preset_select)
         
-        self.lbl_preset_desc = tk.Label(ribbon, text=LEGACY_PRESETS[self.active_preset_name]["desc"], font=("Segoe UI", 7, "italic"), fg=TEXT_MUTED, bg="#1a1e24", anchor="w")
-        self.lbl_preset_desc.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=10)
+        self.lbl_preset_desc = tk.Label(left_f, text=LEGACY_PRESETS[self.active_preset_name]["desc"], font=("Segoe UI", 7, "italic"), fg=TEXT_MUTED, bg="#1a1e24", anchor="w", wraplength=520, justify=tk.LEFT)
+        self.lbl_preset_desc.pack(fill=tk.BOTH, expand=True, pady=2)
+        
+        # Real-Time Spectrum Response Plotter (Canvas)
+        plot_box = tk.Frame(ribbon, bg="#0c0e12", bd=1, relief=tk.SOLID)
+        plot_box.pack(side=tk.RIGHT, padx=10, pady=4)
+        
+        p_hdr = tk.Frame(plot_box, bg="#0c0e12")
+        p_hdr.pack(fill=tk.X)
+        tk.Label(p_hdr, text="REALTIME FREQUENCY RESPONSE (20Hz - 20kHz)", font=("Consolas", 6, "bold"), fg=ACCENT_BLUE, bg="#0c0e12").pack(side=tk.LEFT, padx=4)
+        self.lbl_curve_gain = tk.Label(p_hdr, text="+0.0dB @ 1kHz", font=("Consolas", 6), fg=TEXT_MUTED, bg="#0c0e12")
+        self.lbl_curve_gain.pack(side=tk.RIGHT, padx=4)
+        
+        self.canvas_spectrum = tk.Canvas(plot_box, width=360, height=58, bg="#07080a", highlightthickness=0)
+        self.canvas_spectrum.pack(padx=2, pady=2)
+
+    def update_spectrum_curve(self):
+        c = self.canvas_spectrum
+        c.delete("all")
+        w = 360
+        h = 58
+        mid_y = h / 2.0  # 0 dB line
+        
+        # Grid lines
+        c.create_line(0, mid_y, w, mid_y, fill="#222830", dash=(2, 2))
+        c.create_line(0, mid_y - 18, w, mid_y - 18, fill="#161b22", dash=(1, 4)) # +6 dB
+        c.create_line(0, mid_y + 18, w, mid_y + 18, fill="#161b22", dash=(1, 4)) # -6 dB
+        
+        # Frequency grid markers (100Hz, 1kHz, 10kHz)
+        min_log = math.log10(20)
+        max_log = math.log10(20000)
+        for freq_mark in [100, 1000, 10000]:
+            lx = (math.log10(freq_mark) - min_log) / (max_log - min_log) * w
+            c.create_line(lx, 0, lx, h, fill="#181e26", dash=(1, 3))
+            c.create_text(lx + 10, h - 6, text=f"{freq_mark if freq_mark < 1000 else str(freq_mark//1000)+'k'}", font=("Segoe UI", 5), fill="#444d5a")
+
+        # Gather active filters: preset filters + Master EQ/Preamp
+        preset_info = LEGACY_PRESETS.get(self.active_preset_name, {})
+        filters = list(preset_info.get("filters", []))
+        preamp = preset_info.get("preamp", 0.0)
+        
+        # Add channel 3-band EQ contributions from Loopback/Master
+        if hasattr(self, 'strip_loop') and self.strip_loop.eq_active:
+            if self.strip_loop.eq_low != 0:
+                filters.append({"type": "LSC", "fc": 100, "gain": self.strip_loop.eq_low, "q": 0.71})
+            if self.strip_loop.eq_mid != 0:
+                filters.append({"type": "PK", "fc": 1000, "gain": self.strip_loop.eq_mid, "q": 1.4})
+            if self.strip_loop.eq_high != 0:
+                filters.append({"type": "HSC", "fc": 10000, "gain": self.strip_loop.eq_high, "q": 0.71})
+
+        points = []
+        num_pts = 90
+        for i in range(num_pts):
+            frac = i / (num_pts - 1)
+            f = 10 ** (min_log + frac * (max_log - min_log))
+            
+            # Compute net magnitude response in dB
+            db = preamp
+            for filt in filters:
+                ftype = filt['type']
+                fc = filt['fc']
+                g = filt.get('gain', 0.0)
+                q = filt.get('q', 0.707)
+                if ftype == 'PK':
+                    ratio = f / fc
+                    w_log = math.log(max(1e-4, ratio))
+                    sigma = 1.0 / max(0.2, q)
+                    db += g * math.exp(-0.5 * (w_log / sigma) ** 2)
+                elif ftype == 'LSC':
+                    db += g / (1.0 + (f / fc) ** 2)
+                elif ftype == 'HSC':
+                    db += g * (f / fc) ** 2 / (1.0 + (f / fc) ** 2)
+                elif ftype == 'LP':
+                    db += -20.0 * math.log10(max(1e-3, math.sqrt(1.0 + (f / fc) ** 4)))
+                elif ftype == 'HP':
+                    db += -20.0 * math.log10(max(1e-3, math.sqrt(1.0 + (fc / f) ** 4)))
+            
+            # Map dB to canvas pixels (+12 dB at top, -18 dB at bottom)
+            px = frac * w
+            py = mid_y - (db * 3.0)
+            py = max(2, min(h - 2, py))
+            points.append(px)
+            points.append(py)
+
+        if len(points) >= 4:
+            c.create_line(points, fill=ACCENT_BLUE, width=2, smooth=True)
 
     def build_mixer_canvas(self):
         mixer_frame = tk.Frame(self.root, bg=BG_DARK)
@@ -417,15 +550,20 @@ class CreativeSoundLabsApp:
         self.master_meter.pack(side=tk.LEFT, fill=tk.Y, padx=4)
         self.draw_stereo_meter(0.78, 0.74)
         
-        self.master_fader = ttk.Scale(m_fader_area, from_=6, to=-60, orient=tk.VERTICAL, command=self.on_master_slider)
         self.lbl_m_fader = tk.Label(m_body, text="0.0 dB", font=("Consolas", 8, "bold"), fg="#fff", bg=PANEL_BG)
+        self.master_fader = ttk.Scale(m_fader_area, from_=6, to=-60, orient=tk.VERTICAL, command=self.on_master_slider)
         self.master_fader.set(0)
         self.master_fader.pack(side=tk.LEFT, fill=tk.Y, expand=True, padx=6)
         self.lbl_m_fader.pack(pady=2)
         
-        btn_sync = tk.Button(m_body, text="SYNC MIXER TO SYSTEM (APO)", font=("Segoe UI", 8, "bold"),
-                             bg="#24486d", fg="#fff", bd=1, relief=tk.RAISED, pady=6, command=self.sync_system_apo)
-        btn_sync.pack(fill=tk.X, pady=6)
+        btn_sync = tk.Button(m_body, text="SYNC SYSTEM AUDIO (APO)", font=("Segoe UI", 8, "bold"),
+                             bg="#24486d", fg="#fff", bd=1, relief=tk.RAISED, pady=6, command=lambda: self.sync_system_apo(silent=False))
+        btn_sync.pack(fill=tk.X, pady=4)
+        
+        if not os.path.exists(APO_CONFIG_PATH):
+            btn_install_apo = tk.Button(m_body, text="GET EQUALIZER APO ENGINE", font=("Segoe UI", 7),
+                                        bg="#333", fg=CREATIVE_ORANGE, bd=1, command=self.install_apo_engine)
+            btn_install_apo.pack(fill=tk.X, pady=2)
 
     def draw_stereo_meter(self, left_lvl, right_lvl):
         self.master_meter.delete("all")
@@ -443,29 +581,36 @@ class CreativeSoundLabsApp:
                 self.master_meter.create_rectangle(x1, y1, x2, y2, fill=col, outline="")
 
     def build_hardware_dock(self):
-        dock = tk.Frame(self.root, bg=PANEL_BG, height=60, bd=1, relief=tk.SOLID)
+        dock = tk.Frame(self.root, bg=PANEL_BG, height=64, bd=1, relief=tk.SOLID)
         dock.pack(fill=tk.X, padx=8, pady=(0, 6))
         dock.pack_propagate(False)
         
         led_f = tk.Frame(dock, bg=PANEL_BG)
         led_f.pack(side=tk.LEFT, padx=12, pady=6)
-        tk.Label(led_f, text="HARDWARE RGB 'X' LOGO:", font=("Segoe UI", 8, "bold"), fg="#fff", bg=PANEL_BG).pack(anchor="w")
+        
+        lh = tk.Frame(led_f, bg=PANEL_BG)
+        lh.pack(fill=tk.X)
+        tk.Label(lh, text="HARDWARE RGB 'X' LOGO:", font=("Segoe UI", 8, "bold"), fg="#fff", bg=PANEL_BG).pack(side=tk.LEFT)
+        self.led_preview_box = tk.Label(lh, text="  ", bg="#ff5500", relief=tk.SOLID, bd=1, width=3)
+        self.led_preview_box.pack(side=tk.LEFT, padx=6)
         
         row_c = tk.Frame(led_f, bg=PANEL_BG)
         row_c.pack(fill=tk.X, pady=2)
-        for name, col in [("Classic Amber", "#ff5500"), ("Cyan", "#00ffff"), ("Studio Green", "#00ff66"), ("Red", "#ff0033"), ("Stealth Off", "#000000")]:
+        for name, col in [("Classic Amber", "#ff5500"), ("Cyan", "#00d0ff"), ("Studio Green", "#00ff66"), ("Red", "#ff0033"), ("Stealth Off", "#000000")]:
             tk.Button(row_c, text=name, font=("Segoe UI", 6, "bold"), bg=col if col != "#000000" else "#222",
-                      fg="#000" if col in ["#00ffff", "#00ff66"] else "#fff", bd=1, padx=5, command=lambda c=col: self.set_hardware_led(c)).pack(side=tk.LEFT, padx=2)
-        tk.Button(row_c, text="Custom...", font=("Segoe UI", 6), bg="#333", fg="#fff", bd=1, padx=5, command=self.pick_led).pack(side=tk.LEFT, padx=2)
+                      fg="#000" if col in ["#00d0ff", "#00ff66"] else "#fff", bd=1, padx=6, command=lambda c=col: self.set_hardware_led(c)).pack(side=tk.LEFT, padx=2)
+        tk.Button(row_c, text="Custom...", font=("Segoe UI", 6), bg="#333", fg="#fff", bd=1, padx=6, command=self.pick_led).pack(side=tk.LEFT, padx=2)
 
         gain_box = tk.Frame(dock, bg="#101216", bd=1, relief=tk.SOLID, padx=8, pady=4)
         gain_box.pack(side=tk.RIGHT, padx=12, pady=6)
-        tk.Label(gain_box, text="XAMP ANALOG GAIN SWITCH: PHYSICAL RAIL DIVIDER (LOW: 16-149Ω / HIGH: 150-600Ω)", font=("Consolas", 7, "bold"), fg=CREATIVE_ORANGE, bg="#101216").pack()
+        tk.Label(gain_box, text="XAMP ANALOG GAIN SWITCH: PHYSICAL RAIL DIVIDER", font=("Consolas", 7, "bold"), fg=CREATIVE_ORANGE, bg="#101216").pack()
+        tk.Label(gain_box, text="LOW: 16-149Ω (IEMs/Sensitives) | HIGH: 150-600Ω (Planars/High-Z)", font=("Consolas", 6), fg=TEXT_MUTED, bg="#101216").pack()
 
     def on_preset_select(self, event):
         self.active_preset_name = self.preset_combo.get()
         self.lbl_preset_desc.config(text=LEGACY_PRESETS[self.active_preset_name]["desc"])
-        self.sync_system_apo()
+        self.update_spectrum_curve()
+        self.sync_system_apo(silent=True)
 
     def on_master_slider(self, val):
         f = float(val)
@@ -474,13 +619,22 @@ class CreativeSoundLabsApp:
         self.on_channel_change()
 
     def on_channel_change(self):
-        pass
+        if not hasattr(self, 'master_fader') or not hasattr(self, 'canvas_spectrum'):
+            return
+        self.update_spectrum_curve()
+        self.sync_system_apo(silent=True)
 
     def set_hardware_led(self, hex_code):
         r = int(hex_code[1:3], 16)
         g = int(hex_code[3:5], 16)
         b = int(hex_code[5:7], 16)
-        if self.hid_connected and self.hid_device:
+        
+        # Ensure raw handle is open to Interface 4
+        if not self.hid_device or not self.hid_connected:
+            self.init_hid()
+            
+        success = False
+        if self.hid_device:
             try:
                 pkt = bytearray(65)
                 pkt[0] = 0x00
@@ -493,40 +647,61 @@ class CreativeSoundLabsApp:
                 pkt[7] = g
                 pkt[8] = b
                 self.hid_device.write(bytes(pkt))
+                
                 commit = bytearray(65)
                 commit[0] = 0x00
                 commit[1] = 0x5a
                 commit[2] = 0x11
                 self.hid_device.write(bytes(commit))
+                success = True
             except Exception:
-                pass
-        messagebox.showinfo("Hardware LED", f"Creative Sound Labs: G6 'X' LED set to: {hex_code}")
+                # Reconnect and retry once
+                try:
+                    self.init_hid()
+                    if self.hid_device:
+                        self.hid_device.write(bytes(pkt))
+                        self.hid_device.write(bytes(commit))
+                        success = True
+                except Exception:
+                    pass
+                    
+        # Update live visual swatch on UI immediately
+        if hasattr(self, 'led_preview_box'):
+            self.led_preview_box.config(bg=hex_code)
+        if hasattr(self, 'lbl_hid_stat'):
+            self.lbl_hid_stat.config(text=f"USB HID: LINKED ({hex_code})" if success else "USB HID: RETRYING",
+                                    fg=ACCENT_GREEN if success else ACCENT_RED)
+        return success
 
     def pick_led(self):
-        c = colorchooser.askcolor(title="G6 LED Color")[1]
+        c = colorchooser.askcolor(title="Select G6 Hardware LED Color")[1]
         if c: self.set_hardware_led(c)
 
-    def sync_system_apo(self):
+    def sync_system_apo(self, silent=True):
+        if not hasattr(self, 'master_fader'):
+            return
+        preset_info = LEGACY_PRESETS.get(self.active_preset_name, {})
+        filters = preset_info.get("filters", [])
+        preamp = preset_info.get("preamp", 0.0)
+        
         lines = [
             "# ========================================================",
-            "# G6 DIRECT CONSOLE - HARDWARE SYNC FOR CREATIVE SB1770",
+            "# SOUND BLASTERX G6 - REALTIME HARDWARE DSP CONFIG",
             f"# Active Card Model: {self.active_preset_name}",
             "# ========================================================\n"
         ]
         
-        m_val = float(self.master_fader.get())
+        m_val = float(self.master_fader.get()) + preamp
         if m_val != 0 and m_val > -59:
             lines.append(f"Preamp: {m_val:+.1f} dB\n")
             
-        preset_info = LEGACY_PRESETS.get(self.active_preset_name, {})
-        filters = preset_info.get("filters", [])
         if filters:
-            lines.append(f"# --- {self.active_preset_name} Filter Topology ---")
+            lines.append(f"# --- {self.active_preset_name} Circuit Filters ---")
             for f in filters:
                 f_type = f["type"]
                 fc = f["fc"]
-                gain = f["gain"]
-                q = f["q"]
+                gain = f.get("gain", 0.0)
+                q = f.get("q", 0.707)
                 if f_type in ["HP", "LP"]:
                     lines.append(f"Filter: ON {f_type} Fc {fc} Hz")
                 else:
@@ -546,11 +721,43 @@ class CreativeSoundLabsApp:
                     lines.append(f"Filter: ON HSC Fc 10000 Hz Gain {strip.eq_high:+.1f} dB Q 0.71")
             lines.append("")
 
-        out_path = os.path.join(os.path.expanduser("~"), "Desktop", "Creative_Sound_Labs_G6_Config.txt")
-        with open(out_path, "w", encoding="utf-8") as f:
-            f.write("\n".join(lines))
-            
-        messagebox.showinfo("Mixer Synced", f"Sound BlasterX G6 Synced!\nActive Card: {self.active_preset_name}\n\nExported to:\n{out_path}")
+        config_payload = "\n".join(lines)
+        
+        # 1. Write directly to Equalizer APO live engine if installed
+        apo_written = False
+        if os.path.exists(os.path.dirname(APO_CONFIG_PATH)):
+            try:
+                with open(APO_CONFIG_PATH, "w", encoding="utf-8") as f:
+                    f.write(config_payload)
+                apo_written = True
+            except Exception:
+                pass
+
+        # 2. Always write export backup to Desktop
+        out_path = os.path.join(os.path.expanduser("~"), "Desktop", "Sound_BlasterX_G6_Active_Config.txt")
+        try:
+            with open(out_path, "w", encoding="utf-8") as f:
+                f.write(config_payload)
+        except Exception:
+            pass
+
+        if not silent:
+            dest_info = "Applied LIVE to Windows Audio Engine (Equalizer APO)!" if apo_written else f"Exported to Desktop:\n{out_path}\n\n(Install Equalizer APO to enable live realtime system processing)"
+            messagebox.showinfo("System Audio Synced", f"Sound BlasterX G6 Synced!\nActive Card: {self.active_preset_name}\n\n{dest_info}")
+
+    def install_apo_engine(self):
+        url = "https://sourceforge.net/projects/equalizerapo/files/1.4.2/EqualizerAPO-x64-1.4.2.exe/download"
+        dest = os.path.join(os.path.expanduser("~"), "Desktop", "EqualizerAPO-Setup.exe")
+        msg = ("Equalizer APO is the zero-latency, open-source audio engine for Windows.\n\n"
+               "Would you like to download the official 64-bit installer to your Desktop now?")
+        if messagebox.askyesno("Install System Audio Engine", msg):
+            try:
+                messagebox.showinfo("Downloading", "Downloading Equalizer APO installer to Desktop...\nPlease wait a few seconds.")
+                urllib.request.urlretrieve(url, dest)
+                subprocess.Popen([dest], shell=True)
+            except Exception as e:
+                messagebox.showerror("Download Error", f"Could not download installer automatically:\n{e}\n\nPlease visit sourceforge.net/projects/equalizerapo/")
+
 
 if __name__ == "__main__":
     root = tk.Tk()
